@@ -38,14 +38,9 @@ def train_bpe(
     # pre-tokenization
     with open(input_path, "r", encoding="utf-8") as f:
         all_text = f.read()
-    splitted_text = re.split("|".join(special_tokens), all_text)
-    tokens = []
-    for text in splitted_text:
-        tokens.extend(re.findall(PAT, text))
-    counts = {
-        tuple(bytes([b]) for b in token.encode()): count
-        for token, count in Counter(tokens).items()
-    }
+    tokens = pretokenize(all_text, special_tokens)
+
+    counts = Counter(tokens)
 
     # compute BPE merges
     merges = []
@@ -81,3 +76,38 @@ def train_bpe(
         counts = new_counts
 
     return vocab, merges
+
+
+def pretokenize(
+    all_text: str,
+    special_tokens: list[str] | None,
+    preserve_special_tokens: bool = False,
+) -> list[tuple[bytes, ...]]:
+    if not special_tokens:
+        splitted_text = [all_text]
+    else:
+        # sort the special_tokens so that longer tokens are matched first. this can fix the issue of overlapping special tokens. e.g., special_tokens=["<|endoftext|>", "<|endoftext|><|endoftext|>"], the double <|endoftext|><|endoftext|> is preserved as a single token.
+        sorted_special_tokens = sorted(special_tokens, key=len, reverse=True)
+        # Create pattern with capturing groups to preserve special tokens
+        pattern = (
+            "(" + "|".join(re.escape(token) for token in sorted_special_tokens) + ")"
+        )
+        splitted_text = re.split(pattern, all_text)
+
+    special_tokens_set = set(special_tokens) if special_tokens else set()
+
+    tokens = []
+    for text in splitted_text:
+        if text not in special_tokens_set:
+            tokens.extend(
+                [
+                    tuple(bytes([b]) for b in word.encode("utf-8"))
+                    for word in re.findall(PAT, text)
+                ]
+            )
+        elif preserve_special_tokens:
+            tokens.append(
+                (text.encode("utf-8"),)
+            )  # append bytes of special token as a single value tuple
+
+    return tokens
