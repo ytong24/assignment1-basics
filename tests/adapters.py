@@ -13,7 +13,7 @@ import torch.nn as nn
 from cs336_basics import *
 from cs336_basics.bpe import train_bpe
 from cs336_basics.tokenizer import Tokenizer
-from cs336_basics.model import Linear
+from cs336_basics.model import Linear, Embedding
 
 
 def run_linear(
@@ -63,8 +63,15 @@ def run_embedding(
     Returns:
         Float[Tensor, "... d_model"]: Batch of embeddings returned by your Embedding layer.
     """
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
 
-    raise NotImplementedError
+    embedding = Embedding(vocab_size, d_model, device)
+    nn.Module.load_state_dict(embedding, {"weights": weights})
+
+    return embedding.forward(token_ids.to(device))
 
 
 def run_swiglu(

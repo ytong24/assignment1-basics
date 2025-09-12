@@ -13,8 +13,6 @@ class Linear(nn.Module):
         dtype: torch.dtype | None = None,
     ):
         super().__init__()
-        self.device = device
-        self.dtype = dtype
 
         # Weights has the shape of (d_out x d_in)
         self.weights = nn.Parameter(
@@ -28,3 +26,37 @@ class Linear(nn.Module):
         # y = x @ W.T
         y = einops.einsum(x, self.weights, "... d_int, d_out d_int -> ... d_out")
         return y
+
+
+class Embedding(nn.Module):
+    def __init__(
+        self,
+        num_embeddings: int,
+        embedding_dim: int,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
+    ):
+        super().__init__()
+
+        self.vocab_size = num_embeddings
+
+        # Weights has the shape of (vocab_size x d_model)
+        self.weights = nn.Parameter(
+            torch.empty(num_embeddings, embedding_dim, device=device, dtype=dtype)
+        )
+        # Embedding wieghts: mean: 0, std: 1, a: -3, b: 3
+        nn.init.trunc_normal_(self.weights, mean=0, std=1, a=-3, b=3)
+
+    def forward(self, token_ids: torch.Tensor) -> torch.Tensor:
+        # token_ids: [batch_size, sequence_length]. weights: [vocab_size x d_model]. return: [..., d_model]
+
+        # convert token_ids into [batch_size, sequence_length, vocab_size], where each integer token id is converted to a vector that have zeros everywhere except where the index of last dimension matches the corresponding value of the input tnesor, in which case it will be 1.
+        # for example, given token id 2 and vocab_size 4, it will convert token id into [0,0,1,0]
+
+        # one_hot = torch.nn.functional.one_hot(token_ids, num_classes=self.vocab_size).float()
+        # y = einops.einsum(
+        #     one_hot, self.weights, "... vocab_size, vocab_size d_model -> ... d_model"
+        # )
+        # return y
+
+        return self.weights[token_ids]
