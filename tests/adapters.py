@@ -8,10 +8,12 @@ import numpy.typing as npt
 import torch
 from jaxtyping import Bool, Float, Int
 from torch import Tensor
+import torch.nn as nn
 
 from cs336_basics import *
 from cs336_basics.bpe import train_bpe
 from cs336_basics.tokenizer import Tokenizer
+from cs336_basics.model import Linear
 
 
 def run_linear(
@@ -32,8 +34,15 @@ def run_linear(
     Returns:
         Float[Tensor, "... d_out"]: The transformed output of your linear module.
     """
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
 
-    raise NotImplementedError
+    linear = Linear(d_in, d_out, device)
+    nn.Module.load_state_dict(linear, {"weights": weights})
+
+    return linear.forward(in_features.to(device))
 
 
 def run_embedding(
