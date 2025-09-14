@@ -13,7 +13,7 @@ import torch.nn as nn
 from cs336_basics import *
 from cs336_basics.bpe import train_bpe
 from cs336_basics.tokenizer import Tokenizer
-from cs336_basics.model import Linear, Embedding, RMSNorm
+from cs336_basics.model import Linear, Embedding, RMSNorm, SwiGLU
 
 
 def run_linear(
@@ -103,7 +103,17 @@ def run_swiglu(
     # swiglu.w1.weight.data = w1_weight
     # swiglu.w2.weight.data = w2_weight
     # swiglu.w3.weight.data = w3_weight
-    raise NotImplementedError
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
+
+    swiglu = SwiGLU(d_model, d_ff, device)
+    nn.Module.load_state_dict(
+        swiglu, {"w1": w1_weight, "w2": w2_weight, "w3": w3_weight}
+    )
+
+    return swiglu.forward(in_features.to(device))
 
 
 def run_scaled_dot_product_attention(
