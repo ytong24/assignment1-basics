@@ -13,7 +13,7 @@ import torch.nn as nn
 from cs336_basics import *
 from cs336_basics.bpe import train_bpe
 from cs336_basics.tokenizer import Tokenizer
-from cs336_basics.model import Linear, Embedding
+from cs336_basics.model import Linear, Embedding, RMSNorm
 
 
 def run_linear(
@@ -398,7 +398,15 @@ def run_rmsnorm(
         Float[Tensor,"... d_model"]: Tensor of with the same shape as `in_features` with the output of running
         RMSNorm of the `in_features`.
     """
-    raise NotImplementedError
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
+
+    rms_norm = RMSNorm(d_model, eps, device)
+    nn.Module.load_state_dict(rms_norm, {"weights": weights})
+
+    return rms_norm.forward(in_features.to(device))
 
 
 def run_silu(in_features: Float[Tensor, " ..."]) -> Float[Tensor, " ..."]:
