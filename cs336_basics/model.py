@@ -158,7 +158,7 @@ class RotaryPositionalEmbedding(nn.Module):
         # token_positions: (batch_size, sequence_length)
         # return: (... sequence_length d_k)
 
-        cos_sin = self.cache[token_positions]  # (..., sequence_length, d_k // 2, 2)
+        cos_sin = self.cache[token_positions]  # type: ignore # (..., sequence_length, d_k // 2, 2)
         xreshaped = einops.rearrange(
             x, "... seq_len (d_k_half two) -> ... seq_len d_k_half two", two=2
         )  # (..., seq_len d_k // 2, 2)
@@ -196,3 +196,33 @@ def softmax(x: torch.Tensor, dim: int) -> torch.Tensor:
     sum_exp = exp_vals.sum(dim=dim, keepdim=True)
 
     return exp_vals / sum_exp
+
+
+def scaled_dot_product_attention(
+    Q: torch.Tensor, K: torch.Tensor, V: torch.Tensor, mask: torch.Tensor | None = None
+) -> torch.Tensor:
+    """
+    Given key (K), query (Q), and value (V) tensors, return
+    the output of your scaled dot product attention implementation.
+
+    Args:
+        Q (Float[Tensor, " ... n d_k"]): Query tensor
+        K (Float[Tensor, " ... m d_k"]): Key tensor
+        V (Float[Tensor, " ... m d_v"]): Values tensor
+        mask (Bool[Tensor, " ... n m"] | None): Mask tensor
+    Returns:
+        Float[Tensor, " ... n d_v"]: Output of SDPA
+    """
+    d_k = Q.shape[-1]
+
+    scores = einops.einsum(Q, K, "... n d_k, ... m d_k -> ... n m")
+    scores /= math.sqrt(d_k)
+
+    if mask is not None:
+        scores = scores.masked_fill(~mask, float("-inf"))
+
+    attn = softmax(scores, dim=-1)  # (... queries keys)
+
+    out = einops.einsum(attn, V, "... n m, ... m d_v -> ... n d_v")
+
+    return out
