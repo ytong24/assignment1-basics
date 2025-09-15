@@ -125,3 +125,64 @@ class SwiGLU(nn.Module):
         )
 
         return y
+
+
+class RotaryPositionalEmbedding(nn.Module):
+    def __init__(
+        self,
+        theta: float,
+        d_k: int,
+        max_seq_len: int,
+        device: torch.device | None = None,
+    ):
+        super().__init__()
+
+        # precompute sin and cos
+        theta_base = 1.0 / (
+            theta ** (torch.arange(0, d_k, 2, device=device) / d_k)
+        )  # size (d_k // 2)
+
+        seq_idx = torch.arange(max_seq_len, device=device)  # size (max_seq_len)
+
+        idx_theta = einops.einsum(
+            seq_idx, theta_base, "seq_len, d_k_half -> seq_len d_k_half"
+        )
+
+        cache = torch.stack(
+            [torch.cos(idx_theta), torch.sin(idx_theta)], dim=-1
+        )  # [max_seq_len, d_k//2, 2]
+        self.register_buffer("cache", cache, persistent=False)
+
+    def forward(self, x: torch.Tensor, token_positions: torch.Tensor) -> torch.Tensor:
+        # x: (... sequence_length d_k)
+        # token_positions: (batch_size, sequence_length)
+        # return: (... sequence_length d_k)
+
+        cos_sin = self.cache[token_positions]  # (..., sequence_length, d_k // 2, 2)
+        xreshaped = einops.rearrange(
+            x, "... seq_len (d_k_half two) -> ... seq_len d_k_half two", two=2
+        )  # (..., seq_len d_k // 2, 2)
+
+        cos_vals = cos_sin[..., 0]  # (... seq_len, d_k_half)
+        sin_vals = cos_sin[..., 1]  # (... seq_len, d_k_half)
+
+        rotation_matrices = torch.stack(
+            [
+                torch.stack([cos_vals, -sin_vals], dim=-1),
+                torch.stack([sin_vals, cos_vals], dim=-1),
+            ],
+            dim=-2,
+        )  # (... seq_len d_k_half 2 2)
+
+        # x'_i = R_i @ x_i
+        rotated = einops.einsum(
+            rotation_matrices,
+            xreshaped,
+            "... seq_len d_k_half i j, ... seq_len d_k_half j -> ... seq_len d_k_half i",
+        )
+
+        result = einops.rearrange(
+            rotated, "... seq_len d_k_half two -> ... seq_len (d_k_half two)"
+        )
+
+        return result

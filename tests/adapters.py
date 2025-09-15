@@ -13,7 +13,13 @@ import torch.nn as nn
 from cs336_basics import *
 from cs336_basics.bpe import train_bpe
 from cs336_basics.tokenizer import Tokenizer
-from cs336_basics.model import Linear, Embedding, RMSNorm, SwiGLU
+from cs336_basics.model import (
+    Linear,
+    Embedding,
+    RMSNorm,
+    SwiGLU,
+    RotaryPositionalEmbedding,
+)
 
 
 def run_linear(
@@ -230,7 +236,14 @@ def run_rope(
     Returns:
         Float[Tensor, " ... sequence_length d_k"]: Tensor with RoPEd input.
     """
-    raise NotImplementedError
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
+
+    rope = RotaryPositionalEmbedding(theta, d_k, max_seq_len, device)
+
+    return rope.forward(in_query_or_key.to(device), token_positions.to(device))
 
 
 def run_transformer_block(
